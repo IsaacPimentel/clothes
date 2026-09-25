@@ -1,112 +1,208 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
+  ScrollView,
+  Pressable,
 } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import AvatarCanvas from '../components/3d/AvatarCanvas';
+import DraggableSheet from '../components/ui/DraggableSheet';
+import OverlayHeader from '../components/ui/OverlayHeader';
+import GarmentCard from '../components/wardrobe/GarmentCard';
+import {
+  CATEGORY_FILTERS,
+  CATEGORY_TITLES,
+  GARMENT_OPTIONS,
+  outfitSummary,
+  type CategoryFilter,
+  type GarmentCategory,
+  type GarmentOption,
+} from '../components/wardrobe/catalog';
+import { useAvatarSheetLayout } from '../hooks/useAvatarSheetLayout';
 import { useOutfitStore } from '../stores/outfitStore';
+import { GARMENT_COLORS } from '../types/outfit';
+import { RootStackParamList } from '../navigation/AppNavigator';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
   'Wardrobe'
 >;
 
-const categories = ['Todos', 'Tops', 'Pantalones', 'Zapatos', 'Accesorios'];
+// Handle + title + outfit summary: what stays visible when the sheet is collapsed.
+const SHEET_PEEK = 86;
+const GRID_COLUMNS = 3;
+const GRID_GAP = 10;
 
-const garments = [
-  { id: '1', name: 'Camiseta', emoji: '👕', top: 'classic' as const },
-  { id: '2', name: 'Hoodie', emoji: '🧥', top: 'hoodie' as const },
-  { id: '3', name: 'Overshirt', emoji: '🧥', top: 'overshirt' as const },
-  { id: '4', name: 'Tank', emoji: '🏃', top: 'tank' as const },
-  { id: '5', name: 'Jeans', emoji: '👖', bottom: 'jeans' as const },
-  { id: '6', name: 'Pantalón', emoji: '🩳', bottom: 'trousers' as const },
-  { id: '7', name: 'Shorts', emoji: '🩱', bottom: 'shorts' as const },
-  { id: '8', name: 'Sneakers', emoji: '👟', shoes: 'sneakers' as const },
-  { id: '9', name: 'Botas', emoji: '🥾', shoes: 'boots' as const },
-  { id: '10', name: 'Loafers', emoji: '🥿', shoes: 'loafers' as const },
-  { id: '11', name: 'Gafas', emoji: '🕶️', accessory: 'glasses' as const },
-  { id: '12', name: 'Gorra', emoji: '🧢', accessory: 'cap' as const },
-];
+const SECTION_ORDER: GarmentCategory[] = ['top', 'bottom', 'shoes', 'accessory'];
+
+function CameraIcon() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24">
+      <Path
+        d="M4 8 H7.5 L9 5.5 H15 L16.5 8 H20 V19 H4 Z"
+        fill="none"
+        stroke="#FFFFFF"
+        strokeWidth={1.8}
+        strokeLinejoin="round"
+      />
+      <Circle cx={12} cy={13.2} r={3.4} fill="none" stroke="#FFFFFF" strokeWidth={1.8} />
+    </Svg>
+  );
+}
 
 export default function WardrobeScreen({ navigation }: Props) {
-  const { setTop, setBottom, setShoes, setAccessory } = useOutfitStore();
+  const { insets, snapPoints, viewport, handleSheetHeight } = useAvatarSheetLayout(SHEET_PEEK);
+  const [filter, setFilter] = useState<CategoryFilter>('all');
+  const [gridWidth, setGridWidth] = useState(0);
+  const cardWidth = gridWidth > 0 ? (gridWidth - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS : 0;
+  const outfit = useOutfitStore();
+  const { setTop, setBottom, setShoes, setAccessory, setGarmentColor } = outfit;
 
-  const handleSelectGarment = (item: (typeof garments)[number]) => {
-    if ('top' in item && item.top) {
-      setTop(item.top);
+  const handleSelect = (option: GarmentOption) => {
+    switch (option.category) {
+      case 'top':
+        setTop(option.value);
+        break;
+      case 'bottom':
+        setBottom(option.value);
+        break;
+      case 'shoes':
+        setShoes(option.value);
+        break;
+      case 'accessory':
+        setAccessory(option.value);
+        break;
     }
-
-    if ('bottom' in item && item.bottom) {
-      setBottom(item.bottom);
-    }
-
-    if ('shoes' in item && item.shoes) {
-      setShoes(item.shoes);
-    }
-
-    if ('accessory' in item && item.accessory) {
-      setAccessory(item.accessory);
-    }
-
-    navigation.navigate('FittingRoom');
   };
+
+  const sections = SECTION_ORDER.filter((category) => filter === 'all' || filter === category);
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.back}>‹</Text>
-        </TouchableOpacity>
+      <AvatarCanvas outfitMode="outfit" viewport={viewport} />
 
-        <Text style={styles.title}>Mi vestidor</Text>
-
-        <TouchableOpacity onPress={() => navigation.navigate('Camera')}>
-          <Text style={styles.add}>＋</Text>
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        horizontal
-        data={categories}
-        keyExtractor={(item) => item}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categories}
-        renderItem={({ item, index }) => (
-          <View
-            style={[styles.category, index === 0 && styles.categoryActive]}
-          >
-            <Text
-              style={[
-                styles.categoryText,
-                index === 0 && styles.categoryTextActive,
-              ]}
-            >
-              {item}
-            </Text>
-          </View>
-        )}
-      />
-
-      <FlatList
-        data={garments}
-        numColumns={2}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.grid}
-        renderItem={({ item }) => (
+      <OverlayHeader
+        title="Mi vestidor"
+        topInset={insets.top}
+        onBack={() => navigation.goBack()}
+        hint="↔ Arrastra el avatar para girarlo"
+        right={
           <TouchableOpacity
-            style={styles.card}
-            onPress={() => handleSelectGarment(item)}
+            style={styles.iconButton}
+            onPress={() => navigation.navigate('Camera')}
+            accessibilityRole="button"
+            accessibilityLabel="Escanear prenda con la cámara"
+            hitSlop={8}
           >
-            <Text style={styles.garment}>{item.emoji}</Text>
-            <Text style={styles.garmentName}>{item.name}</Text>
+            <CameraIcon />
           </TouchableOpacity>
-        )}
+        }
       />
+
+      <DraggableSheet
+        snapPoints={snapPoints}
+        initialSnap={1}
+        bottomInset={insets.bottom}
+        stickyHeaderIndices={[0]}
+        accessibilityLabel="Catálogo de prendas"
+        onVisibleHeightChange={handleSheetHeight}
+        header={
+          <View style={styles.sheetHeader}>
+            <View style={styles.sheetHeaderText}>
+              <Text style={styles.title} selectable={false}>
+                Tu look
+              </Text>
+              <Text style={styles.summary} numberOfLines={1} selectable={false}>
+                {outfitSummary(outfit)}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.fittingButton}
+              onPress={() => navigation.navigate('FittingRoom')}
+              accessibilityRole="button"
+              accessibilityLabel="Ver en el probador"
+            >
+              <Text style={styles.fittingButtonText}>Probador ›</Text>
+            </TouchableOpacity>
+          </View>
+        }
+      >
+        {/* Sticky filters (index 0 of the scroll content). */}
+        <View style={styles.filtersBar}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+            {CATEGORY_FILTERS.map(({ key, label }) => {
+              const active = filter === key;
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => setFilter(key)}
+                  style={[styles.chip, active && styles.chipActive]}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {sections.map((category) => (
+          <View key={category} style={styles.section}>
+            <Text style={styles.sectionTitle}>{CATEGORY_TITLES[category]}</Text>
+
+            <View style={styles.grid} onLayout={(event) => setGridWidth(event.nativeEvent.layout.width)}>
+              {cardWidth > 0 &&
+                GARMENT_OPTIONS.filter((option) => option.category === category).map((option) => (
+                  <GarmentCard
+                    key={`${option.category}-${option.value}`}
+                    option={option}
+                    width={cardWidth}
+                    topColor={outfit.garmentColor}
+                    selected={outfit[option.category] === option.value}
+                    onPress={() => handleSelect(option)}
+                  />
+                ))}
+            </View>
+
+            {category === 'top' && (
+              <View style={styles.colorRow}>
+                <Text style={styles.colorLabel}>Color</Text>
+                <View style={styles.swatches}>
+                  {GARMENT_COLORS.map((color) => {
+                    const selected = outfit.garmentColor === color;
+                    return (
+                      <Pressable
+                        key={color}
+                        onPress={() => setGarmentColor(color)}
+                        style={[styles.swatch, { backgroundColor: color }, selected && styles.swatchSelected]}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={`Color ${color}`}
+                        hitSlop={4}
+                      />
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+          </View>
+        ))}
+
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => navigation.navigate('FittingRoom')}
+          accessibilityRole="button"
+        >
+          <Text style={styles.primaryButtonText}>Ver en el probador</Text>
+        </TouchableOpacity>
+      </DraggableSheet>
     </View>
   );
 }
@@ -117,78 +213,142 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B0B0F',
   },
 
-  header: {
-    paddingTop: 55,
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    flexDirection: 'row',
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#17171DCC',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
   },
 
-  back: {
-    color: '#FFFFFF',
-    fontSize: 40,
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  sheetHeaderText: {
+    flex: 1,
   },
 
   title: {
     color: '#FFFFFF',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
   },
 
-  add: {
+  summary: {
     color: '#A78BFA',
-    fontSize: 30,
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 4,
   },
 
-  categories: {
-    paddingHorizontal: 20,
-    gap: 10,
-    paddingBottom: 20,
+  fittingButton: {
+    backgroundColor: '#7C3AED',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
 
-  category: {
-    backgroundColor: '#18181F',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 20,
+  fittingButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 
-  categoryActive: {
+  filtersBar: {
+    backgroundColor: '#17171D',
+    paddingBottom: 12,
+  },
+
+  filters: {
+    gap: 8,
+  },
+
+  chip: {
+    backgroundColor: '#23232C',
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+
+  chipActive: {
     backgroundColor: '#7C3AED',
   },
 
-  categoryText: {
-    color: '#9CA3AF',
+  chipText: {
+    color: '#A1A1AA',
+    fontSize: 13,
+    fontWeight: '600',
   },
 
-  categoryTextActive: {
+  chipTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
 
+  section: {
+    marginBottom: 18,
+  },
+
+  sectionTitle: {
+    color: '#F3F4F6',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+
   grid: {
-    paddingHorizontal: 15,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: GRID_GAP,
   },
 
-  card: {
-    flex: 1,
-    margin: 7,
-    height: 190,
-    borderRadius: 20,
-    backgroundColor: '#17171D',
-    justifyContent: 'center',
+  colorRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 14,
+    gap: 14,
   },
 
-  garment: {
-    fontSize: 70,
-  },
-
-  garmentName: {
-    color: '#FFFFFF',
+  colorLabel: {
+    color: '#A1A1AA',
+    fontSize: 13,
     fontWeight: '600',
-    marginTop: 15,
+  },
+
+  swatches: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+
+  swatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#2D2D38',
+  },
+
+  swatchSelected: {
+    borderColor: '#FFFFFF',
+    transform: [{ scale: 1.12 }],
+  },
+
+  primaryButton: {
+    backgroundColor: '#7C3AED',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });

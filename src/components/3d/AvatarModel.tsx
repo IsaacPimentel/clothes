@@ -1,172 +1,93 @@
-import React, { useEffect, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import React, { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useFrame } from '@react-three/fiber/native';
 import type { Group } from 'three';
 
 import AvatarOutfit from './AvatarOutfit';
+import HumanBody from './HumanBody';
+import { createBodyModel, type BodyShape } from './avatar/bodyModel';
+import type { OutfitMode } from './avatar/outfitGeometry';
 import { useAvatarStore } from '../../stores/avatarStore';
 
-export function PrimitiveAvatar() {
-  const groupRef = useRef<Group>(null);
-  const { height, bust, waist, hips, skinTone, gender } = useAvatarStore();
-  const isMale = gender === 'male';
+export type RotationState = {
+  target: number;
+  velocity: number;
+  dragging: boolean;
+};
+
+// Rebuilding the body takes tens of ms on a phone. While a slider is dragged the
+// measurements are applied at most every REBUILD_INTERVAL ms (the last value always wins).
+const REBUILD_INTERVAL = 90;
+
+function useThrottledShape({ gender, height, bust, waist, hips }: BodyShape): BodyShape {
+  const [applied, setApplied] = useState<BodyShape>({ gender, height, bust, waist, hips });
+  const lastAppliedRef = useRef(0);
 
   useEffect(() => {
-    if (!groupRef.current) {
-      return;
-    }
+    const wait = Math.max(0, REBUILD_INTERVAL - (Date.now() - lastAppliedRef.current));
+    const timer = setTimeout(() => {
+      lastAppliedRef.current = Date.now();
+      setApplied((previous) =>
+        previous.gender === gender &&
+        previous.height === height &&
+        previous.bust === bust &&
+        previous.waist === waist &&
+        previous.hips === hips
+          ? previous
+          : { gender, height, bust, waist, hips },
+      );
+    }, wait);
+    return () => clearTimeout(timer);
+  }, [gender, height, bust, waist, hips]);
 
-    const chestScale = isMale ? 1.08 : 0.92;
-    const hipScale = isMale ? 0.92 : 1.08;
-
-    groupRef.current.scale.set(
-      0.9 + (bust - 80) / 180,
-      0.9 + (height - 150) / 180,
-      0.9 + (hips - 80) / 180,
-    );
-    groupRef.current.scale.x *= chestScale;
-    groupRef.current.scale.z *= hipScale;
-  }, [bust, height, hips, isMale, waist]);
-
-  useFrame((state) => {
-    if (!groupRef.current) {
-      return;
-    }
-
-    const t = state.clock.elapsedTime;
-    groupRef.current.rotation.y = Math.sin(t * 0.8) * 0.45;
-    groupRef.current.position.y = Math.sin(t * 1.5) * 0.06;
-  });
-
-  const torsoWidth = isMale ? 0.96 : 0.84;
-  const torsoDepth = isMale ? 0.62 : 0.58;
-  const shoulderWidth = isMale ? 0.82 : 0.7;
-  const hipWidth = isMale ? 0.7 : 0.78;
-
-  return (
-    <group ref={groupRef} position={[0, -1.2, 0]} scale={1.1}>
-      <mesh position={[0, 2.04, 0]} castShadow>
-        <sphereGeometry args={[0.42, 32, 32]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[0, 1.45, 0]} castShadow>
-        <cylinderGeometry args={[0.12, 0.14, 0.28, 18]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[0, 0.8, 0]} castShadow>
-        <capsuleGeometry args={[0.28, 1.05, 8, 18]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[0, -0.4, 0]} castShadow>
-        <capsuleGeometry args={[0.26, 0.9, 8, 18]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[-(shoulderWidth + 0.12), 0.85, 0]} rotation={[0, 0, 0.28]} castShadow>
-        <capsuleGeometry args={[0.11, 1.05, 6, 12]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[(shoulderWidth + 0.12), 0.85, 0]} rotation={[0, 0, -0.28]} castShadow>
-        <capsuleGeometry args={[0.11, 1.05, 6, 12]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[-0.22, -1.7, 0]} rotation={[0, 0, 0.02]} castShadow>
-        <capsuleGeometry args={[0.12, 1.3, 8, 12]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[0.22, -1.7, 0]} rotation={[0, 0, -0.02]} castShadow>
-        <capsuleGeometry args={[0.12, 1.3, 8, 12]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-    </group>
-  );
+  return applied;
 }
 
-export default function AvatarModel() {
-  const groupRef = useRef<Group>(null);
-  const { height, bust, waist, hips, skinTone, gender } = useAvatarStore();
-  const isMale = gender === 'male';
+type AvatarModelProps = {
+  outfitMode: OutfitMode;
+  rotationRef: RefObject<RotationState>;
+};
 
-  useEffect(() => {
-    if (!groupRef.current) {
+export default function AvatarModel({ outfitMode, rotationRef }: AvatarModelProps) {
+  const turntableRef = useRef<Group>(null);
+  const bodyRef = useRef<Group>(null);
+
+  const gender = useAvatarStore((state) => state.gender);
+  const height = useAvatarStore((state) => state.height);
+  const bust = useAvatarStore((state) => state.bust);
+  const waist = useAvatarStore((state) => state.waist);
+  const hips = useAvatarStore((state) => state.hips);
+  const skinTone = useAvatarStore((state) => state.skinTone);
+
+  const shape = useThrottledShape({ gender, height, bust, waist, hips });
+  const model = useMemo(() => createBodyModel(shape), [shape]);
+
+  useFrame((state, delta) => {
+    const turntable = turntableRef.current;
+    const body = bodyRef.current;
+    const spin = rotationRef.current;
+    if (!turntable || !body || !spin) {
       return;
     }
 
-    const chestScale = isMale ? 1.12 : 0.94;
-    const hipScale = isMale ? 0.9 : 1.12;
-    groupRef.current.scale.set(
-      0.95 + (bust - 80) / 180,
-      0.9 + (height - 150) / 180,
-      0.9 + (hips - 80) / 180,
-    );
-    groupRef.current.scale.x *= chestScale;
-    groupRef.current.scale.z *= hipScale;
-  }, [bust, height, hips, isMale, waist]);
-
-  useFrame((state) => {
-    if (!groupRef.current) {
-      return;
+    // Drag to rotate, with inertia after release.
+    if (!spin.dragging) {
+      spin.target += spin.velocity * delta;
+      spin.velocity *= Math.exp(-3.5 * delta);
     }
+    turntable.rotation.y += (spin.target - turntable.rotation.y) * (1 - Math.exp(-12 * delta));
 
+    // Subtle idle: weight shift and breathing.
     const t = state.clock.elapsedTime;
-    groupRef.current.rotation.y = Math.sin(t * 0.8) * 0.45;
-    groupRef.current.rotation.x = Math.sin(t * 1.4) * 0.04;
-    groupRef.current.position.y = Math.sin(t * 1.6) * 0.08;
+    body.rotation.z = Math.sin(t * 0.6) * 0.006;
+    body.scale.y = 1 + Math.sin(t * 1.4) * 0.0025;
   });
 
-  const shoulderWidth = isMale ? 0.84 : 0.72;
-  const torsoWidth = isMale ? 0.96 : 0.82;
-  const torsoDepth = isMale ? 0.62 : 0.58;
-  const hipWidth = isMale ? 0.7 : 0.8;
-
   return (
-    <group ref={groupRef} position={[0, -1.45, 0]}>
-      <mesh position={[0, 2.07, 0]} castShadow>
-        <sphereGeometry args={[0.42, 32, 32]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[0, 1.45, 0]} castShadow>
-        <cylinderGeometry args={[0.12, 0.15, 0.28, 18]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[0, 0.82, 0]} castShadow>
-        <capsuleGeometry args={[0.28, 1.05, 8, 18]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[0, -0.42, 0]} castShadow>
-        <capsuleGeometry args={[0.26, 0.92, 8, 18]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[-(shoulderWidth + 0.12), 0.86, 0]} rotation={[0, 0, 0.28]} castShadow>
-        <capsuleGeometry args={[0.12, 1.02, 6, 12]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[(shoulderWidth + 0.12), 0.86, 0]} rotation={[0, 0, -0.28]} castShadow>
-        <capsuleGeometry args={[0.12, 1.02, 6, 12]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[-0.22, -1.72, 0]} rotation={[0, 0, 0.03]} castShadow>
-        <capsuleGeometry args={[0.12, 1.32, 8, 12]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <mesh position={[0.22, -1.72, 0]} rotation={[0, 0, -0.03]} castShadow>
-        <capsuleGeometry args={[0.12, 1.32, 8, 12]} />
-        <meshStandardMaterial color={skinTone} />
-      </mesh>
-
-      <AvatarOutfit />
+    <group ref={turntableRef}>
+      <group ref={bodyRef}>
+        <HumanBody model={model} skinTone={skinTone} />
+        <AvatarOutfit model={model} mode={outfitMode} />
+      </group>
     </group>
   );
 }

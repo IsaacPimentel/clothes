@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import Slider from '@react-native-community/slider';
 
 type SliderFieldProps = {
   label: string;
@@ -21,11 +22,13 @@ export default function SliderField({
   onValueChange,
 }: SliderFieldProps) {
   const safeValue = Math.min(max, Math.max(min, value));
-  const percentage = ((safeValue - min) / (max - min)) * 100;
 
-  const changeValue = (delta: number) => {
-    const next = Math.min(max, Math.max(min, safeValue + delta));
-    onValueChange(next);
+  const setValue = (next: number) => {
+    const rounded = Math.round(next / step) * step;
+    const clamped = Math.min(max, Math.max(min, rounded));
+    if (clamped !== safeValue) {
+      onValueChange(clamped);
+    }
   };
 
   return (
@@ -38,20 +41,54 @@ export default function SliderField({
         </Text>
       </View>
 
-      <View style={styles.trackWrap}>
-        <View style={styles.track} />
-        <View style={[styles.fill, { width: `${percentage}%` }]} />
-        <View style={[styles.thumb, { left: `${percentage}%` }]} />
+      <View style={styles.row}>
+        <TouchableOpacity
+          style={styles.controlButton}
+          onPress={() => setValue(safeValue - step)}
+          disabled={safeValue <= min}
+          accessibilityRole="button"
+          accessibilityLabel={`Reducir ${label.toLowerCase()}`}
+          hitSlop={8}
+        >
+          <Text style={[styles.controlText, safeValue <= min && styles.controlTextDisabled]}>−</Text>
+        </TouchableOpacity>
+
+        <Slider
+          style={styles.slider}
+          value={safeValue}
+          minimumValue={min}
+          maximumValue={max}
+          step={step}
+          onValueChange={setValue}
+          minimumTrackTintColor="#7C3AED"
+          maximumTrackTintColor="#3F3F46"
+          thumbTintColor="#FFFFFF"
+          tapToSeek
+          accessibilityLabel={label}
+          accessibilityUnits={unit.trim()}
+        />
+
+        <TouchableOpacity
+          style={styles.controlButton}
+          onPress={() => setValue(safeValue + step)}
+          disabled={safeValue >= max}
+          accessibilityRole="button"
+          accessibilityLabel={`Aumentar ${label.toLowerCase()}`}
+          hitSlop={8}
+        >
+          <Text style={[styles.controlText, safeValue >= max && styles.controlTextDisabled]}>+</Text>
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.controls}>
-        <TouchableOpacity style={styles.controlButton} onPress={() => changeValue(-step)}>
-          <Text style={styles.controlText}>−</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.controlButton} onPress={() => changeValue(step)}>
-          <Text style={styles.controlText}>+</Text>
-        </TouchableOpacity>
+      <View style={styles.rangeRow}>
+        <Text style={styles.rangeText}>
+          {min}
+          {unit}
+        </Text>
+        <Text style={styles.rangeText}>
+          {max}
+          {unit}
+        </Text>
       </View>
     </View>
   );
@@ -59,13 +96,13 @@ export default function SliderField({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   label: {
     color: '#E5E7EB',
@@ -76,45 +113,20 @@ const styles = StyleSheet.create({
     color: '#A78BFA',
     fontSize: 14,
     fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
-  trackWrap: {
-    position: 'relative',
-    height: 18,
-    justifyContent: 'center',
-  },
-  track: {
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: '#3F3F46',
-  },
-  fill: {
-    position: 'absolute',
-    left: 0,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: '#7C3AED',
-  },
-  thumb: {
-    position: 'absolute',
-    top: 6,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#FFFFFF',
-    transform: [{ translateX: -7 }],
-    shadowColor: '#FFFFFF',
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  controls: {
+  row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
+    alignItems: 'center',
+    gap: 8,
+  },
+  slider: {
+    flex: 1,
+    height: 40,
   },
   controlButton: {
-    width: 42,
-    height: 30,
+    width: 36,
+    height: 32,
     borderRadius: 10,
     backgroundColor: '#23232C',
     alignItems: 'center',
@@ -122,8 +134,21 @@ const styles = StyleSheet.create({
   },
   controlText: {
     color: '#FFFFFF',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     lineHeight: 22,
+  },
+  controlTextDisabled: {
+    color: '#4B5563',
+  },
+  rangeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 44,
+    marginTop: -4,
+  },
+  rangeText: {
+    color: '#6B7280',
+    fontSize: 11,
   },
 });

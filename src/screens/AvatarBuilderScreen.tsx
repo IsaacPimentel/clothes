@@ -8,9 +8,12 @@ import {
 
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import AvatarCanvas from '../components/3d/AvatarCanvas';
+import DraggableSheet from '../components/ui/DraggableSheet';
+import OverlayHeader from '../components/ui/OverlayHeader';
 import SliderField from '../components/ui/SliderField';
+import { useAvatarSheetLayout } from '../hooks/useAvatarSheetLayout';
 import { useAvatarStore } from '../stores/avatarStore';
-import { SKIN_TONES, type AvatarGender } from '../types/avatar';
+import { MEASUREMENT_RANGES, SKIN_TONES, type AvatarGender } from '../types/avatar';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
 type Props = NativeStackScreenProps<
@@ -18,111 +21,149 @@ type Props = NativeStackScreenProps<
   'AvatarBuilder'
 >;
 
+// Handle + title + summary: what stays visible when the sheet is collapsed.
+const SHEET_PEEK = 86;
+
+const GENDER_OPTIONS: { value: AvatarGender; label: string }[] = [
+  { value: 'female', label: 'Mujer' },
+  { value: 'male', label: 'Hombre' },
+];
+
 export default function AvatarBuilderScreen({ navigation }: Props) {
-  const { height, bust, waist, hips, skinTone, gender, updateAvatar } = useAvatarStore();
-  const genderOptions: AvatarGender[] = ['female', 'male'];
+  const { insets, snapPoints, viewport, handleSheetHeight } = useAvatarSheetLayout(SHEET_PEEK);
+  const {
+    height,
+    bust,
+    waist,
+    hips,
+    skinTone,
+    gender,
+    updateAvatar,
+    setGender,
+    resetMeasurements,
+  } = useAvatarStore();
+
+  const genderLabel = gender === 'male' ? 'Hombre' : 'Mujer';
+  const bustLabel = gender === 'male' ? 'Pecho' : 'Busto';
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.back}>‹</Text>
-        </TouchableOpacity>
+      <AvatarCanvas outfitMode="base" viewport={viewport} />
 
-        <Text style={styles.headerTitle}>Crear avatar</Text>
+      <OverlayHeader
+        title="Crear avatar"
+        topInset={insets.top}
+        onBack={() => navigation.goBack()}
+        hint="↔ Arrastra el avatar para girarlo"
+      />
 
-        <View style={{ width: 30 }} />
-      </View>
-
-      <View style={styles.avatarArea}>
-        <View style={styles.previewCard}>
-          <View style={styles.previewGlow} />
-          <AvatarCanvas />
-        </View>
-      </View>
-
-      <View style={styles.panel}>
-        <Text style={styles.title}>Personaliza tu cuerpo</Text>
-
-        <View style={styles.genderSection}>
-          <Text style={styles.sectionLabel}>Género</Text>
-          <View style={styles.genderRow}>
-            {genderOptions.map((option) => (
-              <TouchableOpacity
-                key={option}
-                onPress={() => updateAvatar({ gender: option })}
-                style={[
-                  styles.genderButton,
-                  gender === option && styles.genderButtonSelected,
-                ]}
-              >
-                <Text style={styles.genderText}>{option === 'male' ? 'Hombre' : 'Mujer'}</Text>
-              </TouchableOpacity>
-            ))}
+      <DraggableSheet
+        snapPoints={snapPoints}
+        initialSnap={1}
+        bottomInset={insets.bottom}
+        accessibilityLabel="Panel de personalización"
+        onVisibleHeightChange={handleSheetHeight}
+        header={
+          <View>
+            <Text style={styles.title} selectable={false}>
+              Personaliza tu cuerpo
+            </Text>
+            <Text style={styles.summary} selectable={false}>
+              {genderLabel} · {height} cm · {bust}/{waist}/{hips} cm
+            </Text>
           </View>
+        }
+      >
+        <Text style={styles.sectionLabel}>Género</Text>
+        <View style={styles.genderRow}>
+          {GENDER_OPTIONS.map((option) => {
+            const selected = gender === option.value;
+            return (
+              <TouchableOpacity
+                key={option.value}
+                onPress={() => setGender(option.value)}
+                style={[styles.genderButton, selected && styles.genderButtonSelected]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+              >
+                <Text style={styles.genderText}>{option.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
+        <Text style={styles.helper}>
+          Al cambiar de género se cargan medidas de referencia. Ajústalas a tu cuerpo.
+        </Text>
 
+        <Text style={styles.sectionLabel}>Medidas</Text>
         <SliderField
           label="Estatura"
           value={height}
-          min={150}
-          max={200}
+          min={MEASUREMENT_RANGES.height.min}
+          max={MEASUREMENT_RANGES.height.max}
           unit=" cm"
           onValueChange={(value) => updateAvatar({ height: value })}
         />
-
         <SliderField
-          label="Busto"
+          label={bustLabel}
           value={bust}
-          min={70}
-          max={120}
+          min={MEASUREMENT_RANGES.bust.min}
+          max={MEASUREMENT_RANGES.bust.max}
           unit=" cm"
           onValueChange={(value) => updateAvatar({ bust: value })}
         />
-
         <SliderField
           label="Cintura"
           value={waist}
-          min={50}
-          max={110}
+          min={MEASUREMENT_RANGES.waist.min}
+          max={MEASUREMENT_RANGES.waist.max}
           unit=" cm"
           onValueChange={(value) => updateAvatar({ waist: value })}
         />
-
         <SliderField
           label="Cadera"
           value={hips}
-          min={70}
-          max={130}
+          min={MEASUREMENT_RANGES.hips.min}
+          max={MEASUREMENT_RANGES.hips.max}
           unit=" cm"
           onValueChange={(value) => updateAvatar({ hips: value })}
         />
 
-        <View style={styles.swatchesSection}>
-          <Text style={styles.swatchesTitle}>Tono de piel</Text>
-
-          <View style={styles.swatchesRow}>
-            {SKIN_TONES.map((tone) => (
+        <Text style={styles.sectionLabel}>Tono de piel</Text>
+        <View style={styles.swatchesRow}>
+          {SKIN_TONES.map((tone) => {
+            const selected = skinTone === tone;
+            return (
               <TouchableOpacity
                 key={tone}
                 onPress={() => updateAvatar({ skinTone: tone })}
-                style={[
-                  styles.swatch,
-                  { backgroundColor: tone },
-                  skinTone === tone && styles.swatchSelected,
-                ]}
+                style={[styles.swatch, { backgroundColor: tone }, selected && styles.swatchSelected]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`Tono de piel ${tone}`}
               />
-            ))}
-          </View>
+            );
+          })}
         </View>
 
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.navigate('FittingRoom')}
-        >
-          <Text style={styles.buttonText}>Ir al probador</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={resetMeasurements}
+            accessibilityRole="button"
+          >
+            <Text style={styles.secondaryButtonText}>Restablecer</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate('FittingRoom')}
+            accessibilityRole="button"
+          >
+            <Text style={styles.buttonText}>Ir al probador</Text>
+          </TouchableOpacity>
+        </View>
+      </DraggableSheet>
     </View>
   );
 }
@@ -133,90 +174,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B0B0F',
   },
 
-  header: {
-    height: 70,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-
-  back: {
+  title: {
     color: '#FFFFFF',
-    fontSize: 40,
+    fontSize: 20,
+    fontWeight: '800',
   },
 
-  headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-
-  avatarArea: {
-    flex: 1,
-    minHeight: 260,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 8,
-  },
-
-  previewCard: {
-    flex: 1,
-    borderRadius: 28,
-    overflow: 'hidden',
-    backgroundColor: '#0B0B0F',
-    borderWidth: 1,
-    borderColor: '#2D1B4F',
-    shadowColor: '#7C3AED',
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 5,
-  },
-
-  previewGlow: {
-    position: 'absolute',
-    top: 20,
-    right: 24,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#7C3AED33',
-    zIndex: 1,
-  },
-
-  panel: {
-    backgroundColor: '#17171D',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 26,
+  summary: {
+    color: '#A78BFA',
+    fontSize: 13,
+    fontWeight: '600',
     marginTop: 4,
   },
 
-  title: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 18,
-  },
-
-  genderSection: {
-    marginBottom: 16,
-  },
-
   sectionLabel: {
-    color: '#E5E7EB',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#F3F4F6',
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 8,
     marginBottom: 10,
   },
 
   genderRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 2,
   },
 
   genderButton: {
@@ -237,28 +218,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  swatchesSection: {
-    marginBottom: 18,
-    marginTop: 6,
-  },
-
-  swatchesTitle: {
-    color: '#E5E7EB',
-    fontSize: 14,
-    fontWeight: '600',
+  helper: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 8,
     marginBottom: 10,
   },
 
   swatchesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
+    marginBottom: 20,
   },
 
   swatch: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: 'transparent',
   },
@@ -268,12 +245,31 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.1 }],
   },
 
+  actions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: '#23232C',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+
+  secondaryButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+
   button: {
+    flex: 2,
     backgroundColor: '#7C3AED',
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
-    marginTop: 8,
     shadowColor: '#7C3AED',
     shadowOpacity: 0.25,
     shadowRadius: 14,

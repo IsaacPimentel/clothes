@@ -23,7 +23,8 @@
         {
           "cameraPermission": "Permite escanear prendas para agregarlas al vestidor."
         }
-      ]
+      ],
+      "expo-asset"
     ]
   }
 }

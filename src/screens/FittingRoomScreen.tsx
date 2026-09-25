@@ -10,13 +10,12 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import AvatarCanvas from '../components/3d/AvatarCanvas';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useOutfitStore } from '../stores/outfitStore';
+import { GARMENT_COLORS } from '../types/outfit';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
   'FittingRoom'
 >;
-
-const swatches = ['#E5E7EB', '#F59E0B', '#3B82F6', '#10B981', '#F43F5E', '#8B5CF6'];
 
 export default function FittingRoomScreen({ navigation }: Props) {
   const { top, bottom, shoes, accessory, garmentColor, setGarmentColor } = useOutfitStore();
@@ -59,7 +58,7 @@ export default function FittingRoomScreen({ navigation }: Props) {
 
         <Text style={styles.sectionLabel}>Color de prenda</Text>
         <View style={styles.swatchesRow}>
-          {swatches.map((color) => (
+          {GARMENT_COLORS.map((color) => (
             <TouchableOpacity
               key={color}
               style={[
