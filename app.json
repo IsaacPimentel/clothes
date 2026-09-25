@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "FittingRoom3D",
+    "slug": "fitting-room-3d",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Permite fotografiar prendas para agregarlas al vestidor.",
+        "NSPhotoLibraryUsageDescription": "Permite seleccionar prendas desde tu galería."
+      }
+    },
+    "android": {
+      "permissions": [
+        "CAMERA"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permite escanear prendas para agregarlas al vestidor."
+        }
+      ]
+    ]
+  }
+}
