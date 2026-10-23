@@ -21,7 +21,7 @@ export const GENDER_PRESETS: Record<AvatarGender, AvatarMeasurements> = {
 };
 
 export const MEASUREMENT_RANGES: Record<MeasurementKey, { min: number; max: number }> = {
-  height: { min: 150, max: 200 },
+  height: { min: 120, max: 220 },
   bust: { min: 70, max: 130 },
   waist: { min: 50, max: 120 },
   hips: { min: 70, max: 135 },

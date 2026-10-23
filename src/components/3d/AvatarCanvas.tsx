@@ -14,7 +14,7 @@ export type ViewportInsets = {
 };
 
 // World-space box that must always fit in the visible area (tallest avatar is 2 m).
-const FRAME_HEIGHT = 2.26;
+const FRAME_HEIGHT = 2.48;
 const FRAME_WIDTH = 1.05;
 const FRAME_CENTER_Y = 1.0;
 // Radians of rotation per pixel dragged.
